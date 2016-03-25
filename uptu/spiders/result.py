@@ -65,9 +65,11 @@ class Result(scrapy.Spider):
         self.sheet.write(self.count,11,item[item['s6']])
         self.sheet.write(self.count,12,item['gp'])
         self.sheet.write(self.count,13,item['tot'])
-        if item['tot'] > self.top[0][1]:
+        if int(item['tot']) > self.top[0][1]:
+            self.top[0][1] = int(item['tot'])
             self.top[0][0] = item['name']
-        if item['tot'] < self.top[1][1]:
+        if int(item['tot']) < self.top[1][1]:
+            self.top[1][1] = int(item['tot']) 
             self.top[1][0] = item['name']
         
 
@@ -142,8 +144,8 @@ class Result(scrapy.Spider):
         temp = format(resp.xpath('//*[@id="ctl00_ContentPlaceHolder1_tr1"]/td[3]/text()').extract())
         item['gp'] = temp[3:-2]
         temp = format(resp.xpath('//*[@id="Pane0_content"]/table[3]/tbody/tr[2]/td[3]/text()').extract())
-        print temp
-        item['tot'] = temp[3:-2]
+        print temp[5:-7]
+        item['tot'] = temp[5:-7]
         self.add_in_sheet(item)
 
     def parse(self, response):
@@ -166,7 +168,7 @@ class Result(scrapy.Spider):
                 continue
             self.parse_result(self.driver.current_url)
             self.roll += 1
-        self.count +=1
+        self.count +=3
         self.sheet.write(self.count,0,"Upper Topper")
         self.sheet.write(self.count,1,self.top[0][0])
         self.sheet.write(self.count+1,0,"Lower Topper")
