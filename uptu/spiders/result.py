@@ -14,40 +14,43 @@ import xlwt
 from Tkinter import *
 
 class Result(scrapy.Spider):
-    name = "result"
+    name = "btech"
     roll = 1409110901
     sheet = None
     workbook = None
     count = 1
+    top = [["",0],["",1000]]
     allowed_domains = ['http://new.aktu.co.in/']
     start_urls = ['http://new.aktu.co.in/']
 
     def __init__(self, filename=None):
     	self.workbook = xlwt.Workbook()
         self.sheet = self.workbook.add_sheet('Sheet_1')
-        self.sheet.write(0,0,'Name')
-        self.sheet.write(0,1,"Father's Name")
-        self.sheet.write(0,2,'Roll No.')
-        self.sheet.write(0,3,'Enrollment No.')
-        self.sheet.write(0,4,'Branch')
-        self.sheet.write(0,5,'College')
-        self.sheet.write(0,6,item['s1'])
-        self.sheet.write(0,7,item['s2'])
-        self.sheet.write(0,8,item['s3'])
-        self.sheet.write(0,9,item['s4'])
-        self.sheet.write(0,10,item['s5'])
-        self.sheet.write(0,11,item['s6'])
-        self.sheet.write(0,12,'GP')
-        self.sheet.write(0,13,'Total')
+        
         self.driver = webdriver.Firefox()
         dispatcher.connect(self.spider_closed, signals.spider_closed)
 
     def spider_closed(self, spider):
         self.workbook.save('result.xls')
-
+        self.driver.close()
 
     def add_in_sheet(self,item):
         self.count += 1
+        if self.count == 2:
+            self.sheet.write(0,0,'Name')
+            self.sheet.write(0,1,"Father's Name")
+            self.sheet.write(0,2,'Roll No.')
+            self.sheet.write(0,3,'Enrollment No.')
+            self.sheet.write(0,4,'Branch')
+            self.sheet.write(0,5,'College')
+            self.sheet.write(0,6,item['s1'])
+            self.sheet.write(0,7,item['s2'])
+            self.sheet.write(0,8,item['s3'])
+            self.sheet.write(0,9,item['s4'])
+            self.sheet.write(0,10,item['s5'])
+            self.sheet.write(0,11,item['s6'])
+            self.sheet.write(0,12,'GP')
+            self.sheet.write(0,13,'Total')
         self.sheet.write(self.count,0,item['name'])
         self.sheet.write(self.count,1,item['father'])
         self.sheet.write(self.count,2,item['roll'])
@@ -62,13 +65,17 @@ class Result(scrapy.Spider):
         self.sheet.write(self.count,11,item[item['s6']])
         self.sheet.write(self.count,12,item['gp'])
         self.sheet.write(self.count,13,item['tot'])
+        if item['tot'] > self.top[0][1]:
+            self.top[0][0] = item['name']
+        if item['tot'] < self.top[1][1]:
+            self.top[1][0] = item['name']
         
 
     def parse_result(self, response):
         item = {}
         # Load the current page into Selenium
         
-        self.driver.get(response.url)
+        self.driver.get(response)
         try:
             WebDriverWait(self.driver, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="ctl00_ContentPlaceHolder1_imgstud"]')))
         except TimeoutException:
@@ -140,12 +147,12 @@ class Result(scrapy.Spider):
         self.add_in_sheet(item)
 
     def parse(self, response):
-        for i in xrange(20):
+        while self.roll < 1409110903:
             self.driver.get('http://new.aktu.co.in/')
             try:
                 WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH,'//*[@id="ctl00_ContentPlaceHolder1_divSearchRes"]/center/table/tbody/tr[4]/td/center/div/div/img')))
             except:
-                yield scrapy.Request(url="http://new.aktu.co.in/",callback=self.parse)
+                continue
 	        # Sync scrapy and selenium so they agree on the page we're looking at then let scrapy take over
             resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
             rollno = self.driver.find_element_by_name('ctl00$ContentPlaceHolder1$TextBox1')
@@ -155,9 +162,14 @@ class Result(scrapy.Spider):
             time.sleep(5)
             actions.click(submit)
             actions.perform()
-            time.sleep(5)
-            resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
-            self.parse_result(resp)
+            if "Incorrect Code" in format(resp.xpath('*').extract()):
+                continue
+            self.parse_result(self.driver.current_url)
             self.roll += 1
-            return
+        self.count +=1
+        self.sheet.write(self.count,0,"Upper Topper")
+        self.sheet.write(self.count,1,self.top[0][0])
+        self.sheet.write(self.count+1,0,"Lower Topper")
+        self.sheet.write(self.count+1,1,self.top[1][0])
+        return
 
