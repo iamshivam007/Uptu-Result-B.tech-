@@ -1,31 +1,98 @@
-import numpy as np
 import cv2
+import numpy as np
+import operator
+import os
+
+# module level variables ##########################################################################
+MIN_CONTOUR_AREA = 50
 RESIZED_IMAGE_WIDTH = 20
 RESIZED_IMAGE_HEIGHT = 20
-PATH = "Char5.jpg"
+PATH = "image/CaptchaImage (2).jpg"
 
-def preprocessing(img):
-	imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-	imgBlurred = cv2.medianBlur(imgGray, 1, 0)
-	imgThresh = cv2.adaptiveThreshold(imgBlurred,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,11,2)
-	imgThresh = cv2.resize (imgThresh, (RESIZED_IMAGE_WIDTH, RESIZED_IMAGE_HEIGHT))
-	return imgThresh
+class ContourWithData():
 
-npFlattenedImages = np.loadtxt ("npFlattenedCombined.txt", np.float32)
-npClassifications = np.loadtxt("npClassificationCombined.txt", np.float32)
-npClassifications = npClassifications.reshape((npClassifications.size, 1))
-kNearest = cv2.KNearest()
-kNearest.train (npFlattenedImages, npClassifications)
-img = cv2.imread(PATH)
-imgThresh = preprocessing(img)
+    npaContour = None           # contour
+    boundingRect = None         # bounding rect for contour
+    intRectX = 0                # bounding rect top left corner x location
+    intRectY = 0                # bounding rect top left corner y location
+    intRectWidth = 0            # bounding rect width
+    intRectHeight = 0           # bounding rect height
+    fltArea = 0.0               # area of contour
 
-# print imgThresh.shape
-npROIResized = np.float32(imgThresh.reshape((1, RESIZED_IMAGE_WIDTH * RESIZED_IMAGE_HEIGHT )))
-# print npaROIResized.shape
-retval, npResults, neigh_resp, dists = kNearest.find_nearest(npROIResized, k = 1)
+    def calculateRectTopLeftPointAndWidthAndHeight(self):               # calculate bounding rect info
+        [intX, intY, intWidth, intHeight] = self.boundingRect
+        self.intRectX = intX
+        self.intRectY = intY
+        self.intRectWidth = intWidth
+        self.intRectHeight = intHeight
 
-if (retval >= 65):
-	print chr(int(retval))
+    def checkIfContourIsValid(self):
+        if self.fltArea < MIN_CONTOUR_AREA: return False        # much better validity checking would be necessary
+        return True
 
-else:
-	print retval
+def main():
+    allContoursWithData = []
+    validContoursWithData = []
+    
+    npaFlattenedImages= np.loadtxt("npFlattenedCombined.txt",np.float32) 
+    npaClassifications= np.loadtxt("npClassificationCombined.txt", np.float32)
+    kNearest = cv2.KNearest()
+    kNearest.train(npaFlattenedImages, npaClassifications)
+    Captcha = cv2.imread(PATH)
+
+    imgGray = cv2.cvtColor(Captcha, cv2.COLOR_BGR2GRAY)
+    imgBlurred = cv2.GaussianBlur(imgGray, (5,5), 0)
+    imgThresh = cv2.adaptiveThreshold(imgBlurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV,11,2)
+    imgThreshCopy = imgThresh.copy()
+
+
+
+    npaContours, npaHierarchy = cv2.findContours(imgThreshCopy, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for npaContour in npaContours:
+        contourWithData = ContourWithData()                                             # instantiate a contour with data object
+        contourWithData.npaContour = npaContour                                         # assign contour to contour with data
+        contourWithData.boundingRect = cv2.boundingRect(contourWithData.npaContour)     # get the bounding rect
+        contourWithData.calculateRectTopLeftPointAndWidthAndHeight()                    # get bounding rect info
+        contourWithData.fltArea = cv2.contourArea(contourWithData.npaContour)           # calculate the contour area
+        allContoursWithData.append(contourWithData)
+
+    for contourWithData in allContoursWithData:
+        if contourWithData.checkIfContourIsValid():
+            validContoursWithData.append(contourWithData)
+
+    validContoursWithData.sort(key = operator.attrgetter("intRectX"))
+    strFinalString = ""
+    i = 0
+    for contourWithData in validContoursWithData:
+        i += 1
+        cv2.rectangle (Captcha, (contourWithData.intRectX, contourWithData.intRectY),(contourWithData.intRectX + contourWithData.intRectWidth, contourWithData.intRectY + contourWithData.intRectHeight),(0, 255, 0),2)
+        imgROI = imgThresh[contourWithData.intRectY : contourWithData.intRectY + contourWithData.intRectHeight,contourWithData.intRectX : contourWithData.intRectX + contourWithData.intRectWidth]
+        imgROIResized = cv2.resize(imgROI, (RESIZED_IMAGE_WIDTH, RESIZED_IMAGE_HEIGHT))
+        npaROIResized = imgROIResized.reshape((1, RESIZED_IMAGE_WIDTH * RESIZED_IMAGE_HEIGHT))
+        npaROIResized = imgROIResized.reshape((1, RESIZED_IMAGE_WIDTH * RESIZED_IMAGE_HEIGHT))
+        npaROIResized = np.float32 (npaROIResized)
+
+
+        retval, npaResults, neigh_resp, dists = kNearest.find_nearest(npaROIResized, k = 1)
+
+        retval = int(retval)	
+        
+        if retval > 9 :
+        	retval = chr(int(retval))
+        strCurrentChar = str(retval)
+        # print strCurrentChar
+        strFinalString = strFinalString + strCurrentChar
+
+        # cv2.namedWindow('Fuck '+str(i),cv2.WINDOW_NORMAL)
+        # cv2.imshow('Fuck '+str(i),imgROI)
+        # cv2.waitKey(0)
+
+    print strFinalString
+
+
+    # cv2.imshow("imgTestingNumbers", Captcha)
+    # cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    return
+            
+main()
