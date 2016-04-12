@@ -12,6 +12,21 @@ from selenium.common.exceptions import TimeoutException
 import time
 import xlwt
 from Tkinter import *
+from ocr.testing import read_captcha
+import cv2,urllib
+import numpy as np
+
+
+def url_to_image(url):
+    # download the image, convert it to a NumPy array, and then read
+    # it into OpenCV format
+    resp = urllib.urlopen(url)
+    image = np.asarray(bytearray(resp.read()), dtype="uint8")
+    image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+ 
+    # return the image
+    return image
+
 
 class Result(scrapy.Spider):
     name = "btech"
@@ -159,19 +174,28 @@ class Result(scrapy.Spider):
             resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
             rollno = self.driver.find_element_by_name('ctl00$ContentPlaceHolder1$TextBox1')
             rollno.send_keys(self.roll)
+            captcha_url = format(resp.xpath('//*[@id="ctl00_ContentPlaceHolder1_divSearchRes"]/center/table/tbody/tr[4]/td/center/div/div/img/@src').extract())
+            url = "http://new.aktu.co.in/" + captcha_url[3:-2]
+            print url
+            captcha = url_to_image(url)
+            captcha_value = read_captcha(captcha)
+            print captcha_value
+            captcha_input = self.driver.find_element_by_name('ctl00$ContentPlaceHolder1$txtCaptcha')
+            captcha_input.send_keys(captcha_value)
+            input()
             submit = self.driver.find_element_by_name('ctl00$ContentPlaceHolder1$btnSubmit')
             actions = ActionChains(self.driver)
-            time.sleep(5)
             actions.click(submit)
             actions.perform()
+            resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
             if "Incorrect Code" in format(resp.xpath('*').extract()):
                 continue
             self.parse_result(self.driver.current_url)
             self.roll += 1
         self.count +=3
-        self.sheet.write(self.count,0,"Upper Topper")
+        self.sheet.write(self.count,0,"First")
         self.sheet.write(self.count,1,self.top[0][0])
-        self.sheet.write(self.count+1,0,"Lower Topper")
+        self.sheet.write(self.count+1,0,"Last")
         self.sheet.write(self.count+1,1,self.top[1][0])
         return
 

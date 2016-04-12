@@ -1,0 +1,10 @@
+import scrapy
+from scrapy.crawler import CrawlerProcess
+from result import Result
+
+process = CrawlerProcess({
+    'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)'
+})
+
+process.crawl(Result)
+process.start() 
